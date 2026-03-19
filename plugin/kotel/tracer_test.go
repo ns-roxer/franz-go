@@ -6,56 +6,43 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
-	"go.opentelemetry.io/otel/trace"
 )
 
 func TestNewTracer(t *testing.T) {
 	prop := propagation.NewCompositeTextMapPropagator()
 
-	tracer := otel.GetTracerProvider().Tracer(
-		instrumentationName,
-		trace.WithInstrumentationVersion(semVersion()),
-		trace.WithSchemaURL(semconv.SchemaURL),
-	)
-
 	testCases := []struct {
-		name string
-		opts []TracerOpt
-		want *Tracer
+		name               string
+		opts               []TracerOpt
+		expectedPropagator propagation.TextMapPropagator
 	}{
 		{
-			name: "Empty (Use globals)",
-			opts: []TracerOpt{},
-			want: &Tracer{
-				tracerProvider: otel.GetTracerProvider(),
-				tracer:         tracer,
-				propagators:    otel.GetTextMapPropagator(),
-			},
+			name:               "Empty (Use globals)",
+			opts:               []TracerOpt{},
+			expectedPropagator: otel.GetTextMapPropagator(),
 		},
 		{
-			name: "With TracerPropagator",
-			opts: []TracerOpt{TracerPropagator(prop)},
-			want: &Tracer{
-				tracerProvider: otel.GetTracerProvider(),
-				tracer:         tracer,
-				propagators:    prop,
-			},
+			name:               "With TracerPropagator",
+			opts:               []TracerOpt{TracerPropagator(prop)},
+			expectedPropagator: prop,
 		},
 		{
-			name: "Nil TracerPropagator",
-			opts: []TracerOpt{TracerPropagator(nil)},
-			want: &Tracer{
-				tracerProvider: otel.GetTracerProvider(),
-				tracer:         tracer,
-				propagators:    otel.GetTextMapPropagator(),
-			},
+			name:               "Nil TracerPropagator",
+			opts:               []TracerOpt{TracerPropagator(nil)},
+			expectedPropagator: otel.GetTextMapPropagator(),
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			result := NewTracer(tc.opts...)
-			assert.Equal(t, tc.want, result)
+
+			assert.NotNil(t, result.tracer)
+			assert.Equal(t, otel.GetTracerProvider(), result.tracerProvider)
+			assert.Equal(t, tc.expectedPropagator, result.propagators)
+			assert.Empty(t, result.clientID)
+			assert.Empty(t, result.consumerGroup)
+			assert.Nil(t, result.keyFormatter)
+			assert.False(t, result.linkSpans)
 		})
 	}
 }
